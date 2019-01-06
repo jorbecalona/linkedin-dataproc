@@ -76,13 +76,7 @@ _datalab-init() {
 
 # Cleanup
 _cleanup() {
-    echo "This will destroy the datalab portal and delete the cluster."
-    echo -n "Proceed? [y/n]: "
-    read ans
-    if [[ "$ans" == 'y' ]];
-    then
-        _cluster-teardown
-    fi
+    _cluster-teardown
     echo "** Clearing Functions"
     unset -f _cluster-init
     unset -f _cluster-teardown
@@ -102,7 +96,7 @@ _cleanup() {
 }
 
 # Main function
-dataproc-util() {
+dataproc-utils() {
     case "$1" in
     init)
         _cluster-init 
