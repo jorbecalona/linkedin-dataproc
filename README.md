@@ -75,10 +75,11 @@ How To Use
     gcloud config set compute/zone us-east1-b
     ```
 
-5. Source dataproc/env.sh to generate aliases, spin up cluster, ssh tunnel and open dataproc chrome interface
+5. Source dataproc/env.sh, then run dataproc-utils init, spin up cluster, ssh tunnel and open dataproc chrome interface
 
     ```bash
-    source dataproc/init.sh
+    source dataproc/env.sh
+    dataproc-utils init
     ```
 
 6. To fully terminate session, Press Ctrl + C and quit chrome dataproc portal
@@ -86,7 +87,7 @@ How To Use
 7. Remember to deprovision the cluster when you are done! Run cleanup.sh to deprovision cluster and remove aliases set by env.sh.
 
     ```bash
-    dataproc/cleanup.sh
+    dataproc-utils cleanup
     ```
 
 Configuration

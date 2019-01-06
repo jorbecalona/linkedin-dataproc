@@ -1,46 +1,157 @@
 #!/usr/local/bin/bash
 
-PROJECT=linkedin-dataproc
-BUCKET_NAME=linkedin-dataproc
-CLUSTER=linkedin-dataproc-spark
-ZONE=us-east1-b
-CHROME_PROFILE_DIR="$HOME/Library/Application Support/Google/Chrome/Default/"
+# PROJECT=linkedin-dataproc
+# BUCKET=linkedin-dataproc
+# CLUSTER=linkedin-dataproc-spark
+# ZONE=us-east1-b
+# CHROME_PATH=${CHROME_PATH:-"/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome"}
+# CHROME_PROFILE_DIR="$HOME/Library/Application Support/Google/Chrome/Default/"
+DIR="${0%/*}"
+if [[ -e "$DIR/env.conf" ]]; then
+    source "$DIR/env.conf"
+    export PROJECT=${PROJECT:?"PROJECT must be defined in env.conf"}
+    export BUCKET=${BUCKET:?"BUCKET must be defined in env.conf"}
+    export CLUSTER=${CLUSTER:?"CLUSTER must be defined in env.conf"}
+    export ZONE=${ZONE:?"ZONE must be defined in env.conf"}
 
-alias dataproc-cluster-init="gcloud dataproc clusters create $CLUSTER \
-    --subnet default \
-    --zone $ZONE \
-    --single-node \
-    --master-machine-type n1-standard-4 \
-    --master-boot-disk-size 500 \
-    --image-version 1.3-deb9 \
-    --project $PROJECT \
-    --initialization-actions gs://dataproc-initialization-actions/datalab/datalab.sh"
+    export CHROME_PATH='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+    export CHROME_PROFILE_DIR=${CHROME_PROFILE_DIR:-"$HOME/Library/Application Support/Google/Chrome/Default/"}
+    export CLUSTER_MASTER_URI="${CLUSTER}-m"
+fi
 
-# socks proxy over ssh tunnel
-alias dataproc-ssh-tunnel="gcloud compute ssh ${CLUSTER}-m \
-  --project $PROJECT \
-  --zone=$ZONE \
-  --ssh-flag='-D 1080' \
-  --ssh-flag='-N' \
-  --ssh-flag='-n'"
 
-# Open chrome with socks proxy
-alias dataproc-chrome-socks="/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
-   http://linkedin-dataproc-spark-m:8080 \
-  --proxy-server='socks5://localhost:1080' \
-  --host-resolver-rules='MAP * 0.0.0.0, EXCLUDE localhost' \
-  --user-data-dir='/tmp/' \
-  --user-data-dir=$CHROME_PROFILE_DIR"
+# Cluster Functions
+_cluster-init() {
+    echo "Starting Cluster. This may take up to 15 minutes"
+    gcloud dataproc clusters create "${CLUSTER}" \
+        --subnet default \
+        --zone "${ZONE}" \
+        --bucket "${BUCKET}" \
+        --single-node \
+        --master-machine-type n1-standard-4 \
+        --master-boot-disk-size 500 \
+        --image-version 1.3-deb9 \
+        --project "${PROJECT}" \
+        --initialization-actions gs://dataproc-initialization-actions/datalab/datalab.sh
+}
 
-alias dataproc-ssh="gcloud compute ssh --zone=$ZONE ${CLUSTER}-m"
+_cluster-teardown() {
+        # Deprovision  Cluster
+        echo "** Deprovisioning Cluster"
+        gcloud dataproc clusters delete "${CLUSTER}"
+        echo "\tCluster Deleted** \n"
+}
 
-# echo "dataproc-cluster-init starts cluster"
-# echo "dataproc-ssh-tunnel tunnel ports for datalab notebook proxy"
-# echo "dataproc-chrome-socks starts chrome with proxy. navigate to ${CLUSTER}-m:8080 for notebook"
+_cluster-ssh() {
+    gcloud compute ssh --zone=$ZONE ${CLUSTER_MASTER_URI}
+}
 
-echo "Starting Cluster. This may take up to 15 minutes"
-# dataproc-cluster-init
-echo "Starting SSH tunnel and Chrome Socks Dataproc Interface"
-echo "To terminate session, press Ctrl + C and quit the dataproc chrome browser"
-dataproc-chrome-socks &
-dataproc-ssh-tunnel
+# Datalab Functions
+_datalab-ssh-tunnel() {
+    echo "Starting SSH tunnel"
+    gcloud compute ssh $CLUSTER_MASTER_URI \
+        --project=$PROJECT \
+        --zone=$ZONE \
+        --ssh-flag='-D 1080' \
+        --ssh-flag='-N' \
+        --ssh-flag='-n'
+}
+
+_datalab-chrome-socks() {
+    echo "Opening Datalab Interface"
+    datalab_path="http://$CLUSTER_MASTER_URI:8080"
+    $CHROME_PATH \
+        --proxy-server='socks5://localhost:1080' \
+        --host-resolver-rules='MAP * 0.0.0.0, EXCLUDE localhost' \
+        --user-data-dir=$CHROME_PROFILE_DIR -- \
+        http://$CLUSTER_MASTER_URI:8080
+}
+
+_datalab-init() {
+    trap 'kill %1; kill %2' SIGINT
+    _datalab-chrome-socks | tee 1.log | sed -e 's/^/[Chrome-Socks] /' \
+        & _datalab-ssh-tunnel | tee 2.log | sed -e 's/^/[SSH-Tunnel] /' \
+        & wait;
+}
+
+# Cleanup
+_cleanup() {
+    echo "This will destroy the datalab portal and delete the cluster."
+    echo -n "Proceed? [y/n]: "
+    read ans
+    if [[ "$ans" == 'y' ]];
+    then
+        _cluster-teardown
+    fi
+    echo "** Clearing Functions"
+    unset -f _cluster-init
+    unset -f _cluster-teardown
+    unset -f _datalab-ssh-tunnel
+    unset -f _datalab-chrome-socks
+    unset -f _cluster-ssh
+    unset -f _datalab-init
+    unset -f _cleanup
+    unset -v PROJECT
+    unset -v BUCKET
+    unset -v CLUSTER
+    unset -v ZONE
+    unset -v CHROME_PATH
+    unset -v CHROME_PROFILE_DIR
+    unset -v CLUSTER_MASTER_URI
+    echo "\tFunctions cleared ** \n"
+}
+
+# Main function
+dataproc-util() {
+    case "$1" in
+    init)
+        _cluster-init 
+        # || echo "Cluster-Init Failed" & exit;
+        _datalab-init
+        ;;
+
+    cleanup)
+        _cleanup
+        ;;
+
+    cluster)
+        case "$2" in
+        start | up | init)
+            _cluster-init
+            ;;
+        stop | down | delete | teardown)
+            _cluster-teardown
+            ;;
+        ssh)
+            _cluster-ssh
+            ;;
+        *)
+            echo "Usage: $0 cluster {start|stop|ssh}"
+            ;;
+        esac
+        ;;
+        
+    datalab)
+        case "$2" in
+        start | up | init)
+            _datalab-init
+            ;;
+        stop | down | delete)
+            echo "Press Ctrl+C in terminal running datalab. Quit datalab Chrome instance"
+            ;;
+        start-ssh-tunnel)
+            _datalab-ssh-tunnel
+            ;;
+        start-browser)
+            _datalab-chrome-socks
+            ;;
+        *)
+            echo "Usage: $0 datalab {start|stop|start-ssh-tunnel|start-browser}"
+            ;;
+        esac
+        ;;
+    *)
+        echo "Usage: $0 {init|cleanup|cluster|datalab}"
+        ;;
+    esac
+}
