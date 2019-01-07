@@ -36,7 +36,8 @@ _cluster-init() {
                 --master-boot-disk-size 100 \
                 --image-version 1.3-deb9 \
                 --project "${PROJECT}" \
-                --initialization-actions 'gs://linkedin-dataproc/init-scripts/datalab.sh'
+                --initialization-actions 'gs://linkedin-dataproc/init-scripts/datalab.sh', \
+                     'gs://linkedin-dataproc/init-scripts/user-environment.sh'
             ;;
         light-cluster)
             echo "Starting $CLUSTER_TYPE. This may take up to 15 minutes"
@@ -52,7 +53,8 @@ _cluster-init() {
                 --worker-boot-disk-size 100 \
                 --image-version 1.3-deb9 \
                 --project "${PROJECT}" \
-                --initialization-actions 'gs://linkedin-dataproc/init-scripts/datalab.sh'
+                --initialization-actions 'gs://linkedin-dataproc/init-scripts/datalab.sh', \
+                    'gs://linkedin-dataproc/init-scripts/user-environment.sh'
             ;;
         *)
             echo "Usage: $0 datalab {single-node|light-cluster}"
