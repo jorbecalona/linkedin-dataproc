@@ -17,22 +17,50 @@ if [[ -e "$DIR/env.conf" ]]; then
     export CHROME_PATH='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
     export CHROME_PROFILE_DIR=${CHROME_PROFILE_DIR:-"$HOME/Library/Application Support/Google/Chrome/Default/"}
     export CLUSTER_MASTER_URI="${CLUSTER}-m"
+    export CLUSTER_TYPE=${CLUSTER_TYPE:-'single-node'}
 fi
 
 
 # Cluster Functions
 _cluster-init() {
-    echo "Starting Cluster. This may take up to 15 minutes"
-    gcloud dataproc clusters create "${CLUSTER}" \
-        --subnet default \
-        --zone "${ZONE}" \
-        --bucket "${BUCKET}" \
-        --single-node \
-        --master-machine-type n1-standard-4 \
-        --master-boot-disk-size 500 \
-        --image-version 1.3-deb9 \
-        --project "${PROJECT}" \
-        --initialization-actions gs://dataproc-initialization-actions/datalab/datalab.sh
+    case "$CLUSTER_TYPE" in
+        single-node)
+            echo "Starting $CLUSTER_TYPE. This may take up to 15 minutes"
+            gcloud dataproc clusters create "${CLUSTER}" \
+                --subnet default \
+                --zone "${ZONE}" \
+                --bucket "${BUCKET}" \
+                --single-node \
+                --master-machine-type n1-standard-4 \
+                --master-boot-disk-type pd-ssd \
+                --master-boot-disk-size 100 \
+                --image-version 1.3-deb9 \
+                --project "${PROJECT}" \
+                --initialization-actions 'gs://linkedin-dataproc/init-scripts/datalab.sh'
+            ;;
+        light-cluster)
+            echo "Starting $CLUSTER_TYPE. This may take up to 15 minutes"
+            gcloud dataproc clusters create "${CLUSTER}" \
+                --bucket "${BUCKET}" \
+                --subnet default \
+                --zone "${ZONE}" \
+                --master-machine-type n1-standard-4 \
+                --master-boot-disk-type pd-ssd \
+                --master-boot-disk-size 50 \
+                --num-workers 2 \
+                --worker-machine-type n1-highmem-2 \
+                --worker-boot-disk-size 100 \
+                --image-version 1.3-deb9 \
+                --project "${PROJECT}" \
+                --initialization-actions 'gs://linkedin-dataproc/init-scripts/datalab.sh'
+            ;;
+        *)
+            echo "Usage: $0 datalab {single-node|light-cluster}"
+            ;;
+        esac
+    
+
+
 }
 
 _cluster-teardown() {

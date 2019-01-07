@@ -149,3 +149,23 @@ set "$@" --proxy-server='socks5://localhost:1080' \
 #         --user-data-dir=$CHROME_PROFILE_DIR"
 #     alias dataproc-ssh="gcloud compute ssh --zone=$ZONE ${CLUSTER}-m"
 # }
+
+import pyspark
+import sys
+
+testfile='gs://linkedin-dataproc/raw_data/part-00000.gz'
+df = spark.read.format('json').load(testfile)
+
+df.registerTempTable("df");
+df.printSchema()
+
+df.write.format('parquet').save('gs://linkedin-dataproc/processed_data/0001.parquet')
+temp = df.sample(0.05)`
+temp.count()
+df.select('skills').show(20).
+
+
+gcloud dataproc clusters create cluster-d842 --region us-east1 --subnet default --zone us-east1-b --single-node --master-machine-type n1-standard-4 --master-boot-disk-size 100 --image-version 1.3-deb9 --project linkedin-dataproc --initialization-actions 'gs://linkedin-dataproc/init-scripts/datalab.sh','gs://linkedin-dataproc/init-scripts/rclone_install.sh'
+
+Good spark resources
+https://s3.amazonaws.com/assets.datacamp.com/blog_assets/PySpark_SQL_Cheat_Sheet_Python.pdf
